@@ -35,12 +35,18 @@ benchmarks = {
     "tpcds-1gb-delta-load": DeltaTPCDSDataLoadSpec(delta_version=delta_version, scale_in_gb=1),
     "tpcds-3tb-delta-load": DeltaTPCDSDataLoadSpec(delta_version=delta_version, scale_in_gb=3000),
     "tpcds-1gb-parquet-load": ParquetTPCDSDataLoadSpec(scale_in_gb=1),
+    "tpcds-10gb-parquet-load": ParquetTPCDSDataLoadSpec(scale_in_gb=10),
+    "tpcds-100gb-parquet-load": ParquetTPCDSDataLoadSpec(scale_in_gb=100),
+    "tpcds-1tb-parquet-load": ParquetTPCDSDataLoadSpec(scale_in_gb=1000),
     "tpcds-3tb-parquet-load": ParquetTPCDSDataLoadSpec(scale_in_gb=3000),
 
     # TPC-DS benchmark
     "tpcds-1gb-delta": DeltaTPCDSBenchmarkSpec(delta_version=delta_version, scale_in_gb=1),
     "tpcds-3tb-delta": DeltaTPCDSBenchmarkSpec(delta_version=delta_version, scale_in_gb=3000),
     "tpcds-1gb-parquet": ParquetTPCDSBenchmarkSpec(scale_in_gb=1),
+    "tpcds-10gb-parquet": ParquetTPCDSBenchmarkSpec(scale_in_gb=10),
+    "tpcds-100gb-parquet": ParquetTPCDSBenchmarkSpec(scale_in_gb=100),
+    "tpcds-1tb-parquet": ParquetTPCDSBenchmarkSpec(scale_in_gb=1000),
     "tpcds-3tb-parquet": ParquetTPCDSBenchmarkSpec(scale_in_gb=3000),
 
 }

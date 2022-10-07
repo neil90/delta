@@ -4,4 +4,5 @@ resource "google_storage_bucket" "benchmarks_data" {
   location      = var.region
   storage_class = "STANDARD"
   labels        = var.labels
+  force_destroy = true
 }

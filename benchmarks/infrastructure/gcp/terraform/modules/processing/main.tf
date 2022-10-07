@@ -16,7 +16,7 @@ resource "google_dataproc_metastore_service" "this" {
 
 resource "google_dataproc_cluster" "benchmarks" {
   provider = google-beta
-  name     = "delta-performance-benchmarks-cluster"
+  name     = "performance-benchmarks-cluster"
   region   = var.region
 
   cluster_config {

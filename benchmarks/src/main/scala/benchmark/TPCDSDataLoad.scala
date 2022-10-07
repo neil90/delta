@@ -22,7 +22,9 @@ case class TPCDSDataLoadConf(
     userDefinedDbName: Option[String] = None,
     sourcePath: Option[String] = None,
     benchmarkPath: Option[String] = None,
-    excludeNulls: Boolean = true) extends TPCDSConf
+    excludeNulls: Boolean = true,
+    external: Boolean = false,
+    existingBenchmarkPath: Option[String] = None) extends TPCDSConf
 
 object TPCDSDataLoadConf {
   import scopt.OParser
@@ -60,6 +62,16 @@ object TPCDSDataLoadConf {
         .valueName("true/false")
         .action((x, c) => c.copy(excludeNulls = x.toBoolean))
         .text("Whether to remove null primary keys when loading data, default = false"),
+      opt[String]("external")
+        .optional()
+        .valueName("true/false")
+        .action((x, c) => c.copy(external = x.toBoolean))
+        .text("If existing data is already formatted and just needs to be registered to metastore"),
+      opt[String]("existing-benchmark-path")
+        .optional()
+        .valueName("<existing cloud storage path>")
+        .action((x, c) => c.copy(existingBenchmarkPath = Some(x)))
+        .text("Benchmark data existing path")
     )
   }
 
@@ -81,10 +93,12 @@ class TPCDSDataLoad(conf: TPCDSDataLoadConf) extends Benchmark(conf) {
 
     val sourceFormat = "parquet"
     require(conf.scaleInGB > 0)
-    require(Seq(1, 3000).contains(conf.scaleInGB), "")
+    require(Seq(1, 10, 100, 1000, 3000).contains(conf.scaleInGB), "")
     val sourceLocation = conf.sourcePath.getOrElse {
       s"s3://devrel-delta-datasets/tpcds-2.13/tpcds_sf${conf.scaleInGB}_parquet/"
     }
+    val external = conf.external
+    val existingBenchmarkPath = conf.existingBenchmarkPath.getOrElse("")
 
     runQuery(s"DROP DATABASE IF EXISTS ${dbName} CASCADE", s"drop-database")
     runQuery(s"CREATE DATABASE IF NOT EXISTS ${dbName}", s"create-database")
@@ -94,7 +108,13 @@ class TPCDSDataLoad(conf: TPCDSDataLoadConf) extends Benchmark(conf) {
       val sourceTableLocation = s"${sourceLocation}/${tableName}/"
       val targetLocation = s"${dbLocation}/${tableName}/"
       val fullTableName = s"`$dbName`.`$tableName`"
-      log(s"Generating $tableName at $dbLocation/$tableName")
+      val existingTableLocation = if(external == true) s"${existingBenchmarkPath}/tpcds_sf${conf.scaleInGB}_parquet/${tableName}/" else ""
+      if (external == false) {
+        log(s"Generating $tableName at $dbLocation/$tableName")
+      } else if (external == true){
+        
+        log(s"Generating $tableName at $existingTableLocation")
+      }
       val partitionedBy =
         if (!partitionTables || tablePartitionKeys(tableName)(0).isEmpty) ""
         else "PARTITIONED BY " + tablePartitionKeys(tableName).mkString("(", ", ", ")")
@@ -107,15 +127,29 @@ class TPCDSDataLoad(conf: TPCDSDataLoadConf) extends Benchmark(conf) {
       var tableOptions = ""
       runQuery(s"DROP TABLE IF EXISTS $fullTableName", s"drop-table-$tableName")
 
-      runQuery(s"""CREATE TABLE $fullTableName
-                   USING ${conf.formatName}
-                   $partitionedBy $tableOptions
-                   LOCATION '$targetLocation'
-                   SELECT * FROM `${sourceFormat}`.`$sourceTableLocation` $excludeNulls
-                """, s"create-table-$tableName", ignoreError = true)
+      if (external == false) {
+        runQuery(s"""CREATE TABLE $fullTableName
+                    USING ${conf.formatName}
+                    $partitionedBy $tableOptions
+                    LOCATION '$targetLocation'
+                    SELECT * FROM `${sourceFormat}`.`$sourceTableLocation` $excludeNulls
+                  """, s"create-table-$tableName", ignoreError = true)
+      } else if (external == true) {
+        runQuery(s"""CREATE EXTERNAL TABLE $fullTableName(
+                    ${tableColumnSchemas(tableName)}
+                    )
+                    $partitionedBy
+                    STORED AS ${conf.formatName}
+                    LOCATION '$existingTableLocation'
+                  """, s"create-table-$tableName", ignoreError = true)
+        runQuery(s"""ALTER TABLE $fullTableName RECOVER PARTITIONS""")
+        runQuery(s"ANALYZE TABLE $fullTableName COMPUTE STATISTICS")
+        runQuery(s"ANALYZE TABLE $fullTableName COMPUTE STATISTICS FOR ALL COLUMNS")
+      }
 
+      val sourceCountPath = if (external == true) existingTableLocation else sourceTableLocation
       val sourceCount =
-        spark.sql(s"SELECT * FROM `${sourceFormat}`.`$sourceTableLocation` ${excludeNulls}").count()
+        spark.sql(s"SELECT * FROM `${sourceFormat}`.`$sourceCountPath`").count()
       val targetCount = spark.table(fullTableName).count()
       assert(targetCount == sourceCount,
         s"Row count mismatch: source table = $sourceCount, target $fullTableName = $targetCount")
