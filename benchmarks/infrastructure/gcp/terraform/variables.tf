@@ -42,3 +42,8 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "dataproc_deplyoment_type" {
+  description = "Deploying Dataproc via serverless/compute/gke"
+  type = string
+}
